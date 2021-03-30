@@ -1,0 +1,205 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+  namespace: staging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello
+  minReadySeconds: 30
+  progressDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: hello
+        version: v1
+    spec:
+      containers:
+      - name: hello
+        image: vkartik8142/hello:latest
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: p2
+  namespace: staging
+spec:
+  selector:
+    matchLabels:
+      app: p2
+  template:
+    metadata:
+      labels:
+        app: p2
+        version: v1
+    spec:
+      containers:
+      - name: p2
+        image: vkartik8142/hello:latest
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: p3
+  namespace: staging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: p3
+  minReadySeconds: 30
+  progressDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: p3
+        version: v1
+    spec:
+      initContainers:
+      - name: create-empty-file
+        image: alpine
+        command: ["touch", "/app/ready.txt"]
+        volumeMounts:
+        - name: host-path
+          mountPath: /app
+      containers:
+      - name: p3-1
+        image: vkartik8142/hello:latest
+        imagePullPolicy: Always
+        ports:
+          - containerPort: 8080
+            name: http
+            protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command: ["cat", "/app/ready.txt"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 3
+        volumeMounts:
+        - name: host-path
+          mountPath: /app
+      - name: p3-2
+        image: nginx:latest
+        imagePullPolicy: Always
+        ports:
+          - containerPort: 80
+            name: http
+            protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+      volumes:
+      - name: host-path
+        hostPath:
+          path: /tmp/
+          type: DirectoryOrCreate
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: prometheusrules.monitoring.coreos.com
+spec:
+  group: monitoring.coreos.com
+  names:
+    kind: PrometheusRule
+    plural: prometheusrules
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          description: PrometheusRuleSpec contains specification parameters for a
+            Rule.
+          properties:
+            groups:
+              description: Content of Prometheus rule file
+              items:
+                description: RuleGroup is a list of sequentially evaluated recording
+                  and alerting rules.
+                properties:
+                  interval:
+                    type: string
+                  name:
+                    type: string
+                  rules:
+                    items:
+                      description: Rule describes an alerting or recording rule.
+                      properties:
+                        alert:
+                          type: string
+                        annotations:
+                          type: object
+                        expr:
+                          type: string
+                        for:
+                          type: string
+                        labels:
+                          type: object
+                        record:
+                          type: string
+                      required:
+                      - expr
+                    type: array
+                required:
+                - name
+                - rules
+              type: array
+  version: v1

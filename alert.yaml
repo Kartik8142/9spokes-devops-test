@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    prometheus: k8s
+    role: alert-rules
+    app: prometheus
+    component: alertmanager
+    release: prometheus
+  name: 9spokes-cpu-alert
+  namespace: kube-system
+spec:
+  groups:
+    - name: 9spokes-cpu-alert
+      rules:
+      - alert: PodHighCpuLoad
+        expr: (sum(rate(container_cpu_usage_seconds_total[1m])) BY (instance, name) * 100) > 80
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          message: Container CPU usage is above 80%
